@@ -1,7 +1,7 @@
 use super::Demos;
 use crate::{
     catalog::Page,
-    gallery::{Gallery, window_corner_radius},
+    gallery::{Gallery, fit_window_frame, window_corner_radius, window_frame_bounds},
     icon, motion,
     theme::{Theme, Variant, column, row},
 };
@@ -530,7 +530,7 @@ impl Demos {
     }
 
     fn drawer(&self, t: Theme, window: &mut Window, cx: &mut Context<Gallery>) -> AnyElement {
-        let viewport = window.viewport_size();
+        let viewport = window_frame_bounds(window).size;
         let narrow = viewport.width < px(768.);
         let trigger = |index, label, variant, example, side, cx: &mut Context<Gallery>| {
             gpui_shadcn::Button::new(("open-drawer", index), label, variant)
@@ -951,7 +951,7 @@ impl Demos {
 
         triggers
             .child(
-                Dialog::new(cx)
+                fit_window_frame(Dialog::new(cx), window)
                     .open(true)
                     .focus_handle(self.modal_focus.clone())
                     .backdrop(overlay)

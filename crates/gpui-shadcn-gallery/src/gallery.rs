@@ -15,6 +15,8 @@ pub struct Gallery {
     search: Entity<InputState>,
     content_scroll: SmoothScroll,
     sidebar_scroll: SmoothScroll,
+    #[cfg(target_os = "linux")]
+    input_bounds: Option<Bounds<Pixels>>,
     pub demos: Demos,
 }
 
@@ -28,6 +30,8 @@ impl Gallery {
             search,
             content_scroll: SmoothScroll::default(),
             sidebar_scroll: SmoothScroll::default(),
+            #[cfg(target_os = "linux")]
+            input_bounds: None,
             demos: Demos::new(window, cx),
         }
     }
@@ -616,18 +620,71 @@ fn linux_titlebar(t: Theme, window: &Window) -> impl IntoElement {
         .child(button("close-window", "Close", "x").on_click(|_, window, _| window.remove_window()))
 }
 
-pub(crate) fn window_corner_radius(theme: Theme, window: &Window) -> Pixels {
-    #[cfg(target_os = "linux")]
-    if matches!(window.window_decorations(), Decorations::Client { tiling } if !tiling.is_tiled())
+#[cfg(target_os = "linux")]
+fn has_floating_frame(window: &Window) -> bool {
+    matches!(window.window_decorations(), Decorations::Client { tiling } if !tiling.is_tiled())
         && !window.is_maximized()
         && !window.is_fullscreen()
-    {
+}
+
+pub(crate) fn window_corner_radius(theme: Theme, window: &Window) -> Pixels {
+    #[cfg(target_os = "linux")]
+    if has_floating_frame(window) {
         return theme.radius_surface();
     }
 
     #[cfg(not(target_os = "linux"))]
     let _ = (theme, window);
     px(0.)
+}
+
+#[cfg(target_os = "linux")]
+fn window_frame_insets(window: &Window) -> Edges<Pixels> {
+    let Decorations::Client { tiling } = window.window_decorations() else {
+        return Edges::default();
+    };
+    if window.is_maximized() || window.is_fullscreen() {
+        return Edges::default();
+    }
+    let inset = window.client_inset().unwrap_or_default();
+    let edge = |tiled| if tiled { px(0.) } else { inset };
+    Edges {
+        top: edge(tiling.top),
+        right: edge(tiling.right),
+        bottom: edge(tiling.bottom),
+        left: edge(tiling.left),
+    }
+}
+
+pub(crate) fn window_frame_bounds(window: &Window) -> Bounds<Pixels> {
+    let viewport = window.viewport_size();
+    #[cfg(target_os = "linux")]
+    {
+        let insets = window_frame_insets(window);
+        return Bounds::new(
+            point(insets.left, insets.top),
+            size(
+                viewport.width - insets.left - insets.right,
+                viewport.height - insets.top - insets.bottom,
+            ),
+        );
+    }
+    #[cfg(not(target_os = "linux"))]
+    Bounds::new(Point::default(), viewport)
+}
+
+pub(crate) fn fit_window_frame<E: Styled>(element: E, window: &Window) -> E {
+    // Dialog and sheet hosts are positioned relative to the window, including its shadow.
+    let frame = window_frame_bounds(window);
+    if frame.size == window.viewport_size() {
+        return element;
+    }
+    element
+        .left(frame.origin.x)
+        .top(frame.origin.y)
+        .w(frame.size.width)
+        .h(frame.size.height)
+        .overflow_hidden()
 }
 
 #[cfg(target_os = "linux")]
@@ -725,7 +782,25 @@ impl Render for Gallery {
         let has_titlebar = cfg!(any(target_os = "macos", target_os = "windows"));
         #[cfg(target_os = "linux")]
         let has_titlebar = client_tiling.is_some();
-        let width = window.viewport_size().width;
+        #[cfg(target_os = "linux")]
+        if matches!(window.window_decorations(), Decorations::Client { .. }) {
+            // The backend excludes the inset on tiled edges, including maximized windows.
+            window.set_client_inset(px(24.));
+        } else {
+            window.set_client_inset(px(0.));
+        }
+        let frame = window_frame_bounds(window);
+        #[cfg(target_os = "linux")]
+        let has_shadow = frame.size != window.viewport_size();
+        #[cfg(target_os = "linux")]
+        {
+            let input_bounds = has_shadow.then_some(frame);
+            if self.input_bounds != input_bounds {
+                self.input_bounds = input_bounds;
+                window.set_input_region(input_bounds.as_ref().map(std::slice::from_ref));
+            }
+        }
+        let width = frame.size.width;
         let compact = width < px(900.);
         let inset = px(8.);
         let sidebar_width = px(if compact { 194. } else { 226. });
@@ -806,6 +881,23 @@ impl Render for Gallery {
             client_tiling.filter(|_| window.is_resizable() && !window.is_maximized()),
             with_resize_handles,
         );
+        #[cfg(target_os = "linux")]
+        {
+            let insets = window_frame_insets(window);
+            return div()
+                .size_full()
+                .pt(insets.top)
+                .pr(insets.right)
+                .pb(insets.bottom)
+                .pl(insets.left)
+                .child(root.when(has_shadow, |root| {
+                    root.shadow(vec![
+                        BoxShadow::new(px(0.), px(2.), black().opacity(0.20)).blur_radius(px(4.)),
+                        BoxShadow::new(px(0.), px(5.), black().opacity(0.26)).blur_radius(px(7.)),
+                    ])
+                }));
+        }
+        #[cfg(not(target_os = "linux"))]
         root
     }
 }

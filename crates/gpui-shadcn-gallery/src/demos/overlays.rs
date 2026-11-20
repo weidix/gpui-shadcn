@@ -4,7 +4,7 @@ use gpui_shadcn::{Input, overlay};
 use super::Demos;
 use crate::{
     catalog::Page,
-    gallery::{Gallery, window_corner_radius},
+    gallery::{Gallery, fit_window_frame, window_corner_radius},
     icon,
     theme::{Theme, Variant, column, row},
 };
@@ -18,13 +18,10 @@ impl Demos {
         cx: &mut Context<Gallery>,
     ) -> AnyElement {
         match page {
-            Page::Dialog | Page::AlertDialog => self.modal(
-                t,
-                page == Page::AlertDialog,
-                window_corner_radius(t, window),
-                cx,
-            ),
-            Page::Sheet => self.sheet(t, window_corner_radius(t, window), cx),
+            Page::Dialog | Page::AlertDialog => {
+                self.modal(t, page == Page::AlertDialog, window, cx)
+            }
+            Page::Sheet => self.sheet(t, window, cx),
             Page::Dropdown | Page::Popover => {
                 let dropdown = page == Page::Dropdown;
                 let entity = cx.entity().downgrade();
@@ -209,9 +206,10 @@ impl Demos {
         &self,
         t: Theme,
         alert: bool,
-        frame_radius: Pixels,
+        window: &Window,
         cx: &mut Context<Gallery>,
     ) -> AnyElement {
+        let frame_radius = window_corner_radius(t, window);
         let handle = if alert {
             &self.alert_dialog
         } else {
@@ -330,7 +328,7 @@ impl Demos {
             column()
                 .child(trigger)
                 .child(
-                    overlay::AlertDialog::new(cx)
+                    fit_window_frame(overlay::AlertDialog::new(cx), window)
                         .focus_handle(self.modal_focus.clone())
                         .handle(handle.clone())
                         .on_open_change(on_open_change)
@@ -348,7 +346,7 @@ impl Demos {
             column()
                 .child(trigger)
                 .child(
-                    overlay::Dialog::new(cx)
+                    fit_window_frame(overlay::Dialog::new(cx), window)
                         .focus_handle(self.modal_focus.clone())
                         .handle(handle.clone())
                         .on_open_change(on_open_change)
@@ -373,7 +371,8 @@ impl Demos {
         }
     }
 
-    fn sheet(&self, t: Theme, frame_radius: Pixels, cx: &mut Context<Gallery>) -> AnyElement {
+    fn sheet(&self, t: Theme, window: &Window, cx: &mut Context<Gallery>) -> AnyElement {
+        let frame_radius = window_corner_radius(t, window);
         let handle = self.sheet.clone();
         let modal_focus = self.modal_focus.clone();
         let trigger_focus = self.modal_trigger_focus.clone();
@@ -399,7 +398,7 @@ impl Demos {
             .when(handle.is_open(), |this| {
                 this.child(
                     deferred(
-                        overlay::Sheet::new(cx)
+                        fit_window_frame(overlay::Sheet::new(cx), window)
                             .focus_handle(self.modal_focus.clone())
                             .overlay(
                                 div()
