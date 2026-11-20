@@ -472,12 +472,12 @@ impl Gallery {
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn titlebar_frame() -> Stateful<Div> {
     row().id("titlebar").w_full().h(px(40.)).flex_shrink_0()
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn titlebar_label(t: Theme) -> Div {
     div()
         .text_size(px(t.typography.xs.size))
@@ -565,9 +565,166 @@ fn titlebar(t: Theme, window: &Window) -> impl IntoElement {
         )
 }
 
+#[cfg(target_os = "linux")]
+fn linux_titlebar(t: Theme, window: &Window) -> impl IntoElement {
+    let controls = window.window_controls();
+    let can_maximize = controls.maximize && window.is_resizable();
+    let (label, glyph) = if window.is_maximized() {
+        ("Restore", "restore")
+    } else {
+        ("Maximize", "maximize")
+    };
+    let button =
+        |id, label, glyph| Button::icon(id, label, glyph, Variant::Ghost, 32.).flex_shrink_0();
+
+    titlebar_frame()
+        .pr(px(4.))
+        .gap(px(2.))
+        .child(
+            row()
+                .id("linux-titlebar-drag")
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .px(px(12.))
+                .child(titlebar_label(t).truncate())
+                .on_mouse_down(MouseButton::Left, move |event, window, _| {
+                    if event.click_count == 2 && can_maximize {
+                        window.zoom_window();
+                    } else {
+                        window.start_window_move();
+                    }
+                })
+                .when(controls.window_menu, |bar| {
+                    bar.on_mouse_down(MouseButton::Right, |event, window, _| {
+                        window.show_window_menu(event.position);
+                    })
+                }),
+        )
+        .when(controls.minimize && window.is_minimizable(), |bar| {
+            bar.child(
+                button("minimize-window", "Minimize", "minus")
+                    .on_click(|_, window, _| window.minimize_window()),
+            )
+        })
+        .when(can_maximize, |bar| {
+            bar.child(
+                button("maximize-window", label, glyph)
+                    .on_click(|_, window, _| window.zoom_window()),
+            )
+        })
+        .child(button("close-window", "Close", "x").on_click(|_, window, _| window.remove_window()))
+}
+
+pub(crate) fn window_corner_radius(theme: Theme, window: &Window) -> Pixels {
+    #[cfg(target_os = "linux")]
+    if matches!(window.window_decorations(), Decorations::Client { tiling } if !tiling.is_tiled())
+        && !window.is_maximized()
+        && !window.is_fullscreen()
+    {
+        return theme.radius_surface();
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    let _ = (theme, window);
+    px(0.)
+}
+
+#[cfg(target_os = "linux")]
+fn with_resize_handles(frame: Stateful<Div>, tiling: Tiling) -> Stateful<Div> {
+    use CursorStyle::*;
+    use ResizeEdge::*;
+
+    let handle = |id, edge, cursor| {
+        div().id(id).absolute().cursor(cursor).on_mouse_down(
+            MouseButton::Left,
+            move |_, window, cx| {
+                cx.stop_propagation();
+                window.start_window_resize(edge);
+            },
+        )
+    };
+    let grip = px(6.);
+    let edge_space = |tiled| if tiled { px(0.) } else { grip };
+    let (top, right, bottom, left) = (
+        edge_space(tiling.top),
+        edge_space(tiling.right),
+        edge_space(tiling.bottom),
+        edge_space(tiling.left),
+    );
+
+    frame.pt(top).pr(right).pb(bottom).pl(left).children(
+        [
+            (!tiling.top).then(|| {
+                handle("resize-top", Top, ResizeUpDown)
+                    .top_0()
+                    .left(left)
+                    .right(right)
+                    .h(grip)
+            }),
+            (!tiling.right).then(|| {
+                handle("resize-right", Right, ResizeLeftRight)
+                    .right_0()
+                    .top(top)
+                    .bottom(bottom)
+                    .w(grip)
+            }),
+            (!tiling.bottom).then(|| {
+                handle("resize-bottom", Bottom, ResizeUpDown)
+                    .bottom_0()
+                    .left(left)
+                    .right(right)
+                    .h(grip)
+            }),
+            (!tiling.left).then(|| {
+                handle("resize-left", Left, ResizeLeftRight)
+                    .left_0()
+                    .top(top)
+                    .bottom(bottom)
+                    .w(grip)
+            }),
+            (!tiling.top && !tiling.left).then(|| {
+                handle("resize-top-left", TopLeft, ResizeUpLeftDownRight)
+                    .top_0()
+                    .left_0()
+                    .size(grip)
+            }),
+            (!tiling.top && !tiling.right).then(|| {
+                handle("resize-top-right", TopRight, ResizeUpRightDownLeft)
+                    .top_0()
+                    .right_0()
+                    .size(grip)
+            }),
+            (!tiling.bottom && !tiling.right).then(|| {
+                handle("resize-bottom-right", BottomRight, ResizeUpLeftDownRight)
+                    .bottom_0()
+                    .right_0()
+                    .size(grip)
+            }),
+            (!tiling.bottom && !tiling.left).then(|| {
+                handle("resize-bottom-left", BottomLeft, ResizeUpRightDownLeft)
+                    .bottom_0()
+                    .left_0()
+                    .size(grip)
+            }),
+        ]
+        .into_iter()
+        .flatten(),
+    )
+}
+
 impl Render for Gallery {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = Theme::global(cx);
+        #[cfg(target_os = "linux")]
+        let client_tiling = match window.window_decorations() {
+            Decorations::Client { tiling } if !window.is_fullscreen() => Some(tiling),
+            _ => None,
+        };
+        #[cfg(not(target_os = "linux"))]
+        let has_titlebar = cfg!(any(target_os = "macos", target_os = "windows"));
+        #[cfg(target_os = "linux")]
+        let has_titlebar = client_tiling.is_some();
         let width = window.viewport_size().width;
         let compact = width < px(900.);
         let inset = px(8.);
@@ -603,11 +760,7 @@ impl Render for Gallery {
                     .min_w_0()
                     .pb(inset)
                     .pr(inset)
-                    .pt(if cfg!(any(target_os = "macos", target_os = "windows")) {
-                        px(0.)
-                    } else {
-                        inset
-                    })
+                    .pt(if has_titlebar { px(0.) } else { inset })
                     .pl(inset * (1. - sidebar))
                     .child(self.content(t, px(if compact { 16. } else { 28. }), window, cx)),
             );
@@ -636,13 +789,23 @@ impl Render for Gallery {
             .size_full()
             .tab_group()
             .bg(t.sidebar)
+            .rounded(window_corner_radius(t, window))
             .text_color(t.foreground)
             .when_some(t.typography.sans, |root, family| root.font_family(family))
             .text_size(px(t.typography.sm.size))
             .line_height(px(t.typography.sm.line_height));
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         let root = root.child(titlebar(t, window));
-        root.child(workspace)
-            .children(self.demos.toast_overlay(t, cx))
+        #[cfg(target_os = "linux")]
+        let root = root.when(has_titlebar, |root| root.child(linux_titlebar(t, window)));
+        let root = root
+            .child(workspace)
+            .children(self.demos.toast_overlay(t, cx));
+        #[cfg(target_os = "linux")]
+        let root = root.when_some(
+            client_tiling.filter(|_| window.is_resizable() && !window.is_maximized()),
+            with_resize_handles,
+        );
+        root
     }
 }

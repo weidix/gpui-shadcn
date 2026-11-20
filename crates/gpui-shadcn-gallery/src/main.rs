@@ -64,6 +64,10 @@ fn main() {
                         traffic_light_position: cfg!(target_os = "macos")
                             .then(|| point(px(16.), px(13.))),
                     }),
+                    #[cfg(target_os = "linux")]
+                    window_decorations: Some(WindowDecorations::Client),
+                    #[cfg(target_os = "linux")]
+                    window_background: WindowBackgroundAppearance::Transparent,
                     window_min_size: Some(minimum.min(&bounds.size)),
                     ..Default::default()
                 },

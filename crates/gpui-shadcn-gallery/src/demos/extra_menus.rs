@@ -1,7 +1,7 @@
 use super::Demos;
 use crate::{
     catalog::Page,
-    gallery::Gallery,
+    gallery::{Gallery, window_corner_radius},
     icon, motion,
     theme::{Theme, Variant, column, row},
 };
@@ -896,7 +896,11 @@ impl Demos {
                 s.child(side.grip(t).on_mouse_down(MouseButton::Left, start_drag))
             })
             .children(mouse_tracking);
-        let overlay = div().absolute().inset_0().bg(t.overlay_subtle);
+        let overlay = div()
+            .absolute()
+            .inset_0()
+            .rounded(window_corner_radius(t, window))
+            .bg(t.overlay_subtle);
         let overlay = if reduce_motion || drag.is_some() {
             overlay.into_any_element()
         } else {

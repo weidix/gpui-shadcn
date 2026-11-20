@@ -4,17 +4,27 @@ use gpui_shadcn::{Input, overlay};
 use super::Demos;
 use crate::{
     catalog::Page,
-    gallery::Gallery,
+    gallery::{Gallery, window_corner_radius},
     icon,
     theme::{Theme, Variant, column, row},
 };
 
 impl Demos {
-    pub(super) fn overlays(&self, page: Page, t: Theme, cx: &mut Context<Gallery>) -> AnyElement {
+    pub(super) fn overlays(
+        &self,
+        page: Page,
+        t: Theme,
+        window: &Window,
+        cx: &mut Context<Gallery>,
+    ) -> AnyElement {
         match page {
-            Page::Dialog => self.modal(t, false, cx),
-            Page::AlertDialog => self.modal(t, true, cx),
-            Page::Sheet => self.sheet(t, cx),
+            Page::Dialog | Page::AlertDialog => self.modal(
+                t,
+                page == Page::AlertDialog,
+                window_corner_radius(t, window),
+                cx,
+            ),
+            Page::Sheet => self.sheet(t, window_corner_radius(t, window), cx),
             Page::Dropdown | Page::Popover => {
                 let dropdown = page == Page::Dropdown;
                 let entity = cx.entity().downgrade();
@@ -195,7 +205,13 @@ impl Demos {
         })
     }
 
-    fn modal(&self, t: Theme, alert: bool, cx: &mut Context<Gallery>) -> AnyElement {
+    fn modal(
+        &self,
+        t: Theme,
+        alert: bool,
+        frame_radius: Pixels,
+        cx: &mut Context<Gallery>,
+    ) -> AnyElement {
         let handle = if alert {
             &self.alert_dialog
         } else {
@@ -322,6 +338,7 @@ impl Demos {
                             overlay::AlertDialogBackdrop::new()
                                 .absolute()
                                 .inset_0()
+                                .rounded(frame_radius)
                                 .bg(t.overlay),
                         )
                         .popup(overlay::AlertDialogPopup::new().child(panel)),
@@ -339,6 +356,7 @@ impl Demos {
                             overlay::DialogBackdrop::new()
                                 .absolute()
                                 .inset_0()
+                                .rounded(frame_radius)
                                 .bg(t.overlay),
                         )
                         .popup(
@@ -355,7 +373,7 @@ impl Demos {
         }
     }
 
-    fn sheet(&self, t: Theme, cx: &mut Context<Gallery>) -> AnyElement {
+    fn sheet(&self, t: Theme, frame_radius: Pixels, cx: &mut Context<Gallery>) -> AnyElement {
         let handle = self.sheet.clone();
         let modal_focus = self.modal_focus.clone();
         let trigger_focus = self.modal_trigger_focus.clone();
@@ -383,7 +401,13 @@ impl Demos {
                     deferred(
                         overlay::Sheet::new(cx)
                             .focus_handle(self.modal_focus.clone())
-                            .overlay(div().absolute().inset_0().bg(t.overlay))
+                            .overlay(
+                                div()
+                                    .absolute()
+                                    .inset_0()
+                                    .rounded(frame_radius)
+                                    .bg(t.overlay),
+                            )
                             .request_close(dismiss)
                             .surface(
                                 column()
@@ -393,6 +417,8 @@ impl Demos {
                                     .bottom_0()
                                     .w(t.unit(360.))
                                     .bg(t.background)
+                                    .rounded_tr(frame_radius)
+                                    .rounded_br(frame_radius)
                                     .border_l(t.borders.width)
                                     .border_color(t.border)
                                     .p(t.unit(24.))

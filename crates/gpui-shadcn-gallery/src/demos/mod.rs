@@ -241,7 +241,7 @@ impl Demos {
                 self.display(page, t, window, cx)
             }
             Dialog | AlertDialog | Dropdown | Popover | Sheet | Tooltip | Toast => {
-                self.overlays(page, t, cx)
+                self.overlays(page, t, window, cx)
             }
             Calendar | DatePicker | Combobox | InputGroup | Label | Questionnaire => {
                 self.extra_forms(page, t, cx)
