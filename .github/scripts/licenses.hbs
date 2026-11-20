@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GPUI Shadcn Gallery licenses</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; max-width: 72ch; margin: 2rem auto; padding: 0 1rem; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    details { margin-block: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>GPUI Shadcn Gallery dependency licenses</h1>
+  {{#each licenses}}
+  <details>
+    <summary>{{name}}</summary>
+    <ul>
+      {{#each used_by}}
+      <li><a href="https://crates.io/crates/{{crate.name}}/{{crate.version}}">{{crate.name}} {{crate.version}}</a></li>
+      {{/each}}
+    </ul>
+    <pre>{{text}}</pre>
+  </details>
+  {{/each}}
+</body>
+</html>

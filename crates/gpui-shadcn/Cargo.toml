@@ -1,0 +1,19 @@
+[package]
+name = "gpui-shadcn"
+version = "0.1.0"
+edition = "2024"
+description = "Native Rust components for GPUI, inspired by shadcn/ui"
+license = "MIT"
+repository = "https://github.com/weidix/gpui-shadcn"
+readme = "../../README.md"
+
+[features]
+geist = []
+
+[dependencies]
+chrono = { version = "0.4", default-features = false }
+gpui.workspace = true
+gpui-base = "=0.8.1"
+
+[dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
